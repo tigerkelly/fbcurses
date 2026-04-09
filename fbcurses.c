@@ -208,6 +208,14 @@ fbScreen *fbInit(const char *device)
         goto fail;
     }
 
+    /* Save the current framebuffer contents so fbShutdown can restore
+       the screen to exactly the state it was in before we started.   */
+    scr->savedFb = malloc(scr->memLen);
+    if (scr->savedFb)
+        memcpy(scr->savedFb, scr->fbMem, scr->memLen);
+    /* Non-fatal if malloc fails — we just won't restore on exit.    */
+
+
     /* Put terminal into raw / no-echo mode */
     tcgetattr(STDIN_FILENO, &scr->origTermios);
     struct termios raw = scr->origTermios;
@@ -234,6 +242,32 @@ fbScreen *fbInit(const char *device)
             scr->vtNum = vtst.v_active;
     }
 
+    /* Switch to KD_GRAPHICS mode.
+       This tells the kernel's fbcon driver to stop drawing on the
+       framebuffer entirely — no text, no cursor, no cursor blink.
+       Without this, fbcon periodically redraws its blinking cursor
+       on top of our rendering.  Every serious framebuffer app (X11,
+       Wayland, SDL) does this.  We restore KD_TEXT in fbShutdown.   */
+    scr->kdMode = KD_TEXT;   /* safe default if ioctl fails */
+    ioctl(scr->ttyFd, KDGETMODE, &scr->kdMode);
+    ioctl(scr->ttyFd, KDSETMODE, KD_GRAPHICS);
+
+    /* Query and save the current cursor visibility so fbShutdown can
+       restore exactly the state that was in effect before fbInit.
+       We probe by checking /sys/class/graphics/fbcon/cursor_blink;
+       fall back to assuming it was visible (the safe default).     */
+    scr->cursorWasVisible = true;   /* assume visible unless we know otherwise */
+    {
+        /* Try reading /sys to detect if cursor blink was disabled */
+        int cfd = open("/sys/class/graphics/fbcon/cursor_blink", O_RDONLY);
+        if (cfd >= 0) {
+            char ch = '1';
+            if (read(cfd, &ch, 1) == 1)
+                scr->cursorWasVisible = (ch != '0');
+            close(cfd);
+        }
+    }
+
     /* Hide the text cursor */
     fbSetCursor(scr, false);
 
@@ -253,6 +287,7 @@ fail:
     if (scr->fbMem && scr->fbMem != MAP_FAILED)
         munmap(scr->fbMem, scr->memLen);
     free(scr->backBuf);
+    free(scr->savedFb);
     close(fd);
     free(scr);
     return NULL;
@@ -264,17 +299,29 @@ void fbShutdown(fbScreen *scr)
     /* Prevent the atexit handler from running fbShutdown a second time */
     if (_g_scr == scr) _g_scr = NULL;
 
-    fbClear(scr, FB_BLACK);
-    fbFlush(scr);
+    /* Restore the saved screen contents, or clear to black if no
+       save was made (malloc failed at init time).                  */
+    if (scr->savedFb) {
+        memcpy(scr->fbMem, scr->savedFb, scr->memLen);
+        free(scr->savedFb);
+        scr->savedFb = NULL;
+    } else {
+        fbClear(scr, FB_BLACK);
+        fbFlush(scr);
+    }
 
     if (scr->rawMode) {
+        /* Restore KD_TEXT so fbcon takes back the framebuffer and
+           the terminal is usable again after we exit.              */
+        ioctl(scr->ttyFd, KDSETMODE, scr->kdMode);
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &scr->origTermios);
-        fbSetCursor(scr, true);
+        fbSetCursor(scr, scr->cursorWasVisible);
     }
 
     if (scr->fbMem && scr->fbMem != MAP_FAILED)
         munmap(scr->fbMem, scr->memLen);
     free(scr->backBuf);
+    free(scr->savedFb);   /* NULL-safe: free(NULL) is a no-op */
     close(scr->fd);
     if (scr->ttyFd > STDERR_FILENO)   /* don't close STDIN fallback */
         close(scr->ttyFd);
@@ -290,10 +337,13 @@ int fbRows  (const fbScreen *scr) { return scr ? scr->rows   : 0; }
 /* ─── fbSetCursor ────────────────────────────────────────────────── */
 void fbSetCursor(fbScreen *scr, bool visible)
 {
-    (void)scr;
-    /* Write ANSI/VT sequence to show/hide cursor */
+    /* Send the DECTCEM escape to the tty as a belt-and-suspenders measure.
+       This hides the software cursor within fbcon's text renderer.       */
+    int fd = (scr && scr->ttyFd >= 0) ? scr->ttyFd : STDOUT_FILENO;
     const char *seq = visible ? "\033[?25h" : "\033[?25l";
-    { ssize_t _wr = write(STDOUT_FILENO, seq, strlen(seq)); (void)_wr; }
+    { ssize_t _r = write(fd, seq, strlen(seq)); (void)_r; }
+    /* The hardware cursor blink is suppressed by KD_GRAPHICS mode,
+       which is set in fbInit and cleared in fbShutdown.               */
 }
 
 /* ─── fbClear ────────────────────────────────────────────────────── */

@@ -38,6 +38,7 @@ struct fbScreen {
     int      fd;            /* framebuffer device fd                  */
     int      ttyFd;         /* controlling console tty fd             */
     uint8_t *fbMem;
+    uint8_t *savedFb;       /* snapshot of framebuffer taken at fbInit */
     uint32_t *backBuf;
     size_t   memLen;
 
@@ -50,6 +51,8 @@ struct fbScreen {
 
     struct termios origTermios;
     bool rawMode;
+    bool cursorWasVisible;  /* cursor state before fbInit              */
+    int  kdMode;            /* original KD_TEXT/KD_GRAPHICS mode       */
 
     int  vtNum;             /* VT number this process is running on   */
 };
