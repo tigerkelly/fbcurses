@@ -35,7 +35,8 @@ typedef struct {
 
 /* ─── Screen context ─────────────────────────────────────────────── */
 struct fbScreen {
-    int      fd;
+    int      fd;            /* framebuffer device fd                  */
+    int      ttyFd;         /* controlling console tty fd             */
     uint8_t *fbMem;
     uint32_t *backBuf;
     size_t   memLen;
@@ -49,6 +50,8 @@ struct fbScreen {
 
     struct termios origTermios;
     bool rawMode;
+
+    int  vtNum;             /* VT number this process is running on   */
 };
 
 /* ─── Window context ─────────────────────────────────────────────── */

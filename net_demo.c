@@ -299,11 +299,23 @@ static void runSelfTest(uint16_t port, fbNetServer *srv, fbScreen *scr)
 }
 
 
-/* ── Signal handler — sets srv->stop so fbNetRun exits cleanly ───── */
-static void _sigStop(int sig) { (void)sig; }
-/* fbcurses.c installs its own SIGINT handler that calls fbShutdown.
-   We override it here so the signal also interrupts fbNetRun's
-   select() call, causing a clean exit via fbNetStop().              */
+/* ── Signal handler ─────────────────────────────────────────────────
+   fbcurses.c registers its own SIGINT/SIGTERM handler via fbInit()
+   that calls fbShutdown() on the way out.  We chain onto that by
+   calling exit() here, which triggers atexit() -> fbShutdown().
+   fbNetRun()'s select() is interrupted by the signal (EINTR), the
+   loop condition !srv->stop re-evaluates, and since fbShutdown has
+   cleared the screen we just need the process to exit cleanly.
+   We also call fbNetStop() via the global pointer so the loop exits
+   even if the signal arrives between select() calls.               */
+static fbNetServer *_g_srv = NULL;
+
+static void _sigStop(int sig)
+{
+    (void)sig;
+    if (_g_srv) fbNetStop(_g_srv);
+    exit(0);   /* triggers atexit -> fbShutdown -> restores terminal  */
+}
 
 
 int main(int argc, char *argv[])
@@ -324,6 +336,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
+    if (argc > 1) port = (uint16_t)atoi(argv[1]);
+
     fbScreen *scr = fbInit(NULL);
     if (!scr) {
         fprintf(stderr, "fbInit: %s\n", fbGetError());
@@ -340,6 +354,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    _g_srv = srv;   /* give signal handler access to the server */
     fbNetSetLog(srv, FB_NET_LOG_COMMANDS, NULL);
 
     /* Join the default multicast group so the server also receives
@@ -365,6 +380,7 @@ int main(int argc, char *argv[])
            (unsigned long long)fbNetPacketsIn(srv),
            (unsigned long long)fbNetPacketsErr(srv));
 
+    _g_srv = NULL;
     fbNetClose(srv);
     fbShutdown(scr);
     return 0;

@@ -6,6 +6,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include "fbnet.h"
+#include "qparse.h"
 #include "fbcurses_internal.h"
 #include "fonts.h"
 
@@ -49,6 +50,12 @@ struct fbNetServer {
     /* Multicast groups this server has joined */
     struct in_addr mcastGroups[FB_NET_MAX_GROUPS];
     int            nMcastGroups;
+
+    /* Set true while inside fbNetRun() so the dispatcher refuses
+       blocking commands (toast/menu/msgbox/file_pick/color_pick).
+       Blocking inside fbNetRun would freeze the server and swallow
+       keypresses (including the q/Esc quit key).                   */
+    bool       inEventLoop;
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -73,7 +80,6 @@ static void _netLog(fbNetServer *srv, fbNetLogLevel level,
     fflush(fp);
 }
 
-#if(0)
 /* ═══════════════════════════════════════════════════════════════════
  *  Argument parser
  * ═══════════════════════════════════════════════════════════════════ */
@@ -81,58 +87,7 @@ static void _netLog(fbNetServer *srv, fbNetLogLevel level,
 /* Split a command line into tokens in-place.
    Handles "quoted strings" with \" and \\ escapes.
    Returns number of tokens. */
-static int _split(char *line, char **toks, int maxToks)
-{
-    int n = 0;
-    char *p = line;
-
-    /* strip trailing newline/whitespace */
-    int len = (int)strlen(line);
-    while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r' ||
-                       line[len-1] == ' '))
-        line[--len] = '\0';
-
-    while (*p && n < maxToks) {
-        /* skip leading whitespace / commas */
-        while (*p == ' ' || *p == '\t') p++;
-        if (!*p) break;
-
-        if (*p == '"') {
-            /* quoted string: unescape in-place */
-            p++;
-            toks[n++] = p;
-            char *w = p;
-            while (*p && *p != '"') {
-                if (*p == '\\' && *(p+1)) {
-                    p++;
-                    switch (*p) {
-                        case 'n':  *w++ = '\n'; break;
-                        case 't':  *w++ = '\t'; break;
-                        case '"':  *w++ = '"';  break;
-                        case '\\': *w++ = '\\'; break;
-                        default:   *w++ = *p;   break;
-                    }
-                } else {
-                    *w++ = *p;
-                }
-                p++;
-            }
-            *w = '\0';
-            if (*p == '"') p++;
-        } else {
-            toks[n++] = p;
-            while (*p && *p != ',') p++;
-        }
-
-        /* strip trailing spaces from this token */
-        char *end = p - 1;
-        while (end >= toks[n-1] && *end == ' ') *end-- = '\0';
-
-        if (*p == ',') p++;   /* consume the comma */
-    }
-    return n;
-}
-#endif
+/* qparse() is implemented in qparse.c — see qparse.h */
 
 /* ── Colour parsing ──────────────────────────────────────────────── */
 
@@ -315,9 +270,9 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
 
     const char *cmd0 = tok_arr[0]; /* command name */
     char      **toks = tok_arr + 1;/* shift: toks[0] is first argument */
-    argc--;                        /* one fewer arg after removing cmd  */          /* shift so toks[0] is first arg */
+    argc--;                        /* one fewer arg after removing cmd  */          /* shift so toks[0] is first arg   */
 
-	/* ── Screen commands ──────────────────────────────────────────── */
+/* ── Screen commands ──────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "flush") == 0) {
         fbFlush(scr);
@@ -341,7 +296,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Window commands ─────────────────────────────────────────── */
+/* ── Window commands ─────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "win_new") == 0) {
         NEED(4);
@@ -412,7 +367,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Text state ──────────────────────────────────────────────── */
+/* ── Text state ──────────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "move") == 0) {
         NEED(3);
@@ -440,7 +395,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Text output ─────────────────────────────────────────────── */
+/* ── Text output ─────────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "print") == 0) {
         NEED(2);
@@ -483,7 +438,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Drawing primitives ──────────────────────────────────────── */
+/* ── Drawing primitives ──────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "pixel") == 0) {
         NEED(3);
@@ -527,7 +482,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Borders ─────────────────────────────────────────────────── */
+/* ── Borders ─────────────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "border") == 0) {
         NEED(3);
@@ -561,7 +516,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Widgets ─────────────────────────────────────────────────── */
+/* ── Widgets ─────────────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "progress") == 0) {
         /* progress,WIN,col,row,width,pct,fg,bg,showpct */
@@ -632,9 +587,17 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Notifications ───────────────────────────────────────────── */
+/* ── Notifications ───────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "toast") == 0) {
+        /* Refuse to block inside fbNetRun — would freeze the server
+           and swallow keypresses (q/Esc). Return an error instead. */
+        if (srv && srv->inEventLoop) {
+            snprintf(reply, rLen,
+                     "err,toast,not allowed in server event loop (would block)");
+            return false;
+        }
+
         /* toast,kind,ms,STR */
         NEED(3);
         fbToastKind kind = FB_TOAST_INFO;
@@ -645,7 +608,7 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
         return true;
     }
 
-	/* ── Query / info ────────────────────────────────────────────── */
+/* ── Query / info ────────────────────────────────────────────── */
 
     if (strcasecmp(cmd0, "screen_size") == 0) {
         snprintf(reply, rLen, "ok,screen_size,%d,%d,%d,%d",
@@ -851,6 +814,14 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
     /* ── Interactive dialogs (blocking — reply contains result) ──── */
 
     if (strcasecmp(cmd0, "menu") == 0) {
+        /* Refuse to block inside fbNetRun — would freeze the server
+           and swallow keypresses (q/Esc). Return an error instead. */
+        if (srv && srv->inEventLoop) {
+            snprintf(reply, rLen,
+                     "err,menu,not allowed in server event loop (would block)");
+            return false;
+        }
+
         /* menu,col,row,fg,bg,fgsel,bgsel,BORDER,label0,id0,label1,id1,...
            Returns: ok,menu,selected_id   or  ok,menu,-1 (cancelled)  */
         NEED(8);
@@ -880,6 +851,14 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
     }
 
     if (strcasecmp(cmd0, "msgbox") == 0) {
+        /* Refuse to block inside fbNetRun — would freeze the server
+           and swallow keypresses (q/Esc). Return an error instead. */
+        if (srv && srv->inEventLoop) {
+            snprintf(reply, rLen,
+                     "err,msgbox,not allowed in server event loop (would block)");
+            return false;
+        }
+
         /* msgbox,title,msg,buttons,kind
            buttons: ok | ok_cancel | yes_no | yes_no_cancel
            kind:    info | success | warning | error
@@ -908,6 +887,14 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
     }
 
     if (strcasecmp(cmd0, "file_pick") == 0) {
+        /* Refuse to block inside fbNetRun — would freeze the server
+           and swallow keypresses (q/Esc). Return an error instead. */
+        if (srv && srv->inEventLoop) {
+            snprintf(reply, rLen,
+                     "err,file_pick,not allowed in server event loop (would block)");
+            return false;
+        }
+
         /* file_pick[,start_dir]
            Returns: ok,file_pick,/path/to/selected/file
                or:  ok,file_pick, (empty = cancelled)               */
@@ -922,6 +909,14 @@ bool fbNetDispatch(fbNetServer *srv, fbScreen *scr, fbWindow **wins,
     }
 
     if (strcasecmp(cmd0, "color_pick") == 0) {
+        /* Refuse to block inside fbNetRun — would freeze the server
+           and swallow keypresses (q/Esc). Return an error instead. */
+        if (srv && srv->inEventLoop) {
+            snprintf(reply, rLen,
+                     "err,color_pick,not allowed in server event loop (would block)");
+            return false;
+        }
+
         /* color_pick[,initial_color]
            Returns: ok,color_pick,#RRGGBB  or  ok,color_pick, (cancelled) */
         fbColor initial = FB_BLACK;
@@ -1226,13 +1221,15 @@ bool fbNetProcess(fbNetServer *srv)
         next = strchr(line, '\n');
         if (next) *next++ = '\0';
 
-        /* Skip blank lines */
+        /* Skip leading whitespace / CR on this line.
+           Pass the trimmed pointer 'p' to the dispatcher so that
+           leading \r (CRLF line endings) does not contaminate cmd0. */
         char *p = line;
         while (*p == ' ' || *p == '\r' || *p == '\t') p++;
         if (!*p) { line = next; continue; }
 
         char reply[512] = {0};
-        bool ok = fbNetDispatch(srv, srv->scr, srv->wins, line, reply, sizeof(reply));
+        bool ok = fbNetDispatch(srv, srv->scr, srv->wins, p, reply, sizeof(reply));
 
         if (!ok) {
             anyErr = true;
@@ -1281,16 +1278,21 @@ void fbNetRun(fbNetServer *srv, bool autoFlush)
             "fbNetRun started (port %u, autoFlush=%s)",
             srv->port, autoFlush ? "yes" : "no");
 
+    srv->inEventLoop = true;
+
     while (!srv->stop) {
-        /* Wait up to 50ms for either a UDP packet or a keypress */
+        /* Wait up to 50ms for a UDP packet.
+           We do NOT add STDIN to the select() set here — instead we
+           poll for keypresses unconditionally every iteration with a
+           0ms timeout.  This avoids the race where a UDP packet and a
+           keypress both arrive simultaneously but select() only marks
+           the UDP fd ready, causing the keypress check to be skipped. */
         fd_set rfds;
         FD_ZERO(&rfds);
         FD_SET(srv->fd, &rfds);
-        FD_SET(STDIN_FILENO, &rfds);
-        int maxFd = srv->fd > STDIN_FILENO ? srv->fd : STDIN_FILENO;
 
         struct timeval tv = { 0, 50000 };   /* 50ms */
-        int sel = select(maxFd + 1, &rfds, NULL, NULL, &tv);
+        int sel = select(srv->fd + 1, &rfds, NULL, NULL, &tv);
 
         if (sel < 0 && errno != EINTR) break;
 
@@ -1302,15 +1304,17 @@ void fbNetRun(fbNetServer *srv, bool autoFlush)
 
         if (autoFlush && didDraw) fbFlush(srv->scr);
 
-        /* Check for local ESC key to allow clean shutdown */
-        if (FD_ISSET(STDIN_FILENO, &rfds)) {
-            int key = fbGetKeyTimeout(srv->scr, 0);
-            if (key == FB_KEY_ESC || key == 'q') {
-                _netLog(srv, FB_NET_LOG_ERRORS, "local ESC/q — stopping");
-                break;
-            }
+        /* Always poll for local keypress — non-blocking, 0ms timeout.
+           fbGetKeyTimeout returns FB_KEY_NONE immediately if no key is
+           waiting, so this adds negligible overhead.                   */
+        int key = fbGetKeyTimeout(srv->scr, 0);
+        if (key == FB_KEY_ESC || key == 'q' || key == 'Q') {
+            _netLog(srv, FB_NET_LOG_ERRORS, "local ESC/q — stopping");
+            break;
         }
     }
+
+    srv->inEventLoop = false;
 
     _netLog(srv, FB_NET_LOG_ERRORS,
             "fbNetRun stopped. packets in=%llu err=%llu",

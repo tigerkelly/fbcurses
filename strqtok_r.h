@@ -20,13 +20,11 @@
  * SOFTWARE.
  */
 
-/* Originally written on 05/28/1988, modified to bring it up to coding and format
- * standards, and updated for thread safety and correctness. */
+#ifndef STRQTOK_R_H
+#define STRQTOK_R_H
 
-#include "strqtok_r.h"
-
-#define DQUOTE  '"'
-#define SQUOTE  '\''
+#include <stddef.h>
+#include <string.h>
 
 /*
  * strqtok_r - extract successive tokens from a string, allowing quotes (reentrant)
@@ -58,57 +56,7 @@
  * in-place null-termination will cause a SIGSEGV. Always pass a mutable buffer
  * (e.g. a char array or heap-allocated string).
  */
-char *strqtok_r(char *s1, const char *s2, char **saveptr) {
-    char *begin;
-    char  q;
-
-    if (s1 == NULL)
-        s1 = *saveptr;
-
-    /* A NULL saveptr means a previous call already exhausted the string. */
-    if (s1 == NULL)
-        return NULL;
-
-    /* Skip leading separator chars. */
-    while (*s1 && strchr(s2, *s1) != NULL)
-        s1++;
-
-    /* End of string — no more tokens. */
-    if (*s1 == '\0') {
-        *saveptr = NULL;
-        return NULL;
-    }
-
-    if (*s1 == SQUOTE || *s1 == DQUOTE) {
-        /* Quoted token: skip the opening quote, then scan for the closing one. */
-        q = *s1++;
-        begin = s1;
-        while (*s1 && *s1 != q)
-            s1++;
-
-        /*
-         * If we hit end-of-string without finding the closing quote, the
-         * input is malformed. We return what we have (best-effort) and
-         * ensure the next call returns NULL by setting *saveptr to NULL.
-         */
-        if (*s1 == '\0') {
-            *saveptr = NULL;
-            return begin;
-        }
-    } else {
-        /* Unquoted token: scan until the next separator char. */
-        begin = s1;
-        while (*s1 && strchr(s2, *s1) == NULL)
-            s1++;
-    }
-
-    /* Null-terminate the token and advance past the terminating char. */
-    if (*s1)
-        *s1++ = '\0';
-
-    *saveptr = s1;
-    return begin;
-}
+char *strqtok_r(char *s1, const char *s2, char **saveptr);
 
 /*
  * strqtok - non-reentrant wrapper around strqtok_r for single-threaded use.
@@ -116,7 +64,6 @@ char *strqtok_r(char *s1, const char *s2, char **saveptr) {
  * WARNING: This function is NOT thread-safe. In multi-threaded programs use
  * strqtok_r() directly with a per-thread (or per-parse) saveptr variable.
  */
-char *strqtok(char *s1, const char *s2) {
-    static char *sp = NULL;
-    return strqtok_r(s1, s2, &sp);
-}
+char *strqtok(char *s1, const char *s2);
+
+#endif /* STRQTOK_R_H */

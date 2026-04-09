@@ -53,6 +53,11 @@ static const char *_toastName(fbncToastKind k) {
 
 /* ── Colour formatting ───────────────────────────────────────────── */
 static void _colorStr(char *buf, fbncColor c) {
+    /* FBNC_TRANSPARENT sentinel — send the named keyword, not a hex value */
+    if (c == 0xFF000000u) {
+        memcpy(buf, "transparent", 12);   /* 11 chars + NUL */
+        return;
+    }
     snprintf(buf, 8, "#%02X%02X%02X",
              (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
 }
@@ -267,7 +272,7 @@ void fbncCursor(fbNetClient *cl, bool v)
 
 void fbncClear(fbNetClient *cl, fbncColor color)
 {
-    char c[8]; _colorStr(c, color);
+    char c[16]; _colorStr(c, color);
     _send(cl, "clear,%s", c);
 }
 
@@ -321,7 +326,7 @@ void fbncWinFont   (fbNetClient *cl, int w, const char *fn)
 
 void fbncWinClear(fbNetClient *cl, int w, fbncColor bg)
 {
-    char c[8]; _colorStr(c, bg);
+    char c[16]; _colorStr(c, bg);
     _send(cl, "win_clear,%d,%s", w, c);
 }
 
@@ -346,7 +351,7 @@ void fbncMove(fbNetClient *cl, int w, int c, int r)
 
 void fbncColors(fbNetClient *cl, int w, fbncColor fg, fbncColor bg)
 {
-    char f[8], b[8];
+    char f[16], b[8];
     _colorStr(f, fg); _colorStr(b, bg);
     _send(cl, "colors,%d,%s,%s", w, f, b);
 }
@@ -412,37 +417,37 @@ void fbncPrintPx(fbNetClient *cl, int x, int y, const char *str,
 
 void fbncPixel(fbNetClient *cl, int x, int y, fbncColor c)
 {
-    char s[8]; _colorStr(s,c);
+    char s[16]; _colorStr(s,c);
     _send(cl,"pixel,%d,%d,%s",x,y,s);
 }
 
 void fbncLine(fbNetClient *cl, int x0,int y0,int x1,int y1,fbncColor c)
 {
-    char s[8]; _colorStr(s,c);
+    char s[16]; _colorStr(s,c);
     _send(cl,"line,%d,%d,%d,%d,%s",x0,y0,x1,y1,s);
 }
 
 void fbncRect(fbNetClient *cl, int x,int y,int w,int h,fbncColor c)
 {
-    char s[8]; _colorStr(s,c);
+    char s[16]; _colorStr(s,c);
     _send(cl,"rect,%d,%d,%d,%d,%s",x,y,w,h,s);
 }
 
 void fbncFillRect(fbNetClient *cl, int x,int y,int w,int h,fbncColor c)
 {
-    char s[8]; _colorStr(s,c);
+    char s[16]; _colorStr(s,c);
     _send(cl,"fill_rect,%d,%d,%d,%d,%s",x,y,w,h,s);
 }
 
 void fbncCircle(fbNetClient *cl, int cx,int cy,int r,fbncColor c)
 {
-    char s[8]; _colorStr(s,c);
+    char s[16]; _colorStr(s,c);
     _send(cl,"circle,%d,%d,%d,%s",cx,cy,r,s);
 }
 
 void fbncFillCircle(fbNetClient *cl, int cx,int cy,int r,fbncColor c)
 {
-    char s[8]; _colorStr(s,c);
+    char s[16]; _colorStr(s,c);
     _send(cl,"fill_circle,%d,%d,%d,%s",cx,cy,r,s);
 }
 
@@ -452,14 +457,14 @@ void fbncFillCircle(fbNetClient *cl, int cx,int cy,int r,fbncColor c)
 
 void fbncDrawBorder(fbNetClient *cl, int w, fbncBorder style, fbncColor color)
 {
-    char c[8]; _colorStr(c,color);
+    char c[16]; _colorStr(c,color);
     _send(cl,"border,%d,%s,%s",w,_borderName(style),c);
 }
 
 void fbncBox(fbNetClient *cl, int w, int col, int row,
              int cols, int rows, fbncBorder style, fbncColor color)
 {
-    char c[8]; _colorStr(c,color);
+    char c[16]; _colorStr(c,color);
     _send(cl,"box,%d,%d,%d,%d,%d,%s,%s",w,col,row,cols,rows,_borderName(style),c);
 }
 
@@ -479,7 +484,7 @@ void fbncTitleBar(fbNetClient *cl, int w, const char *title,
 void fbncProgress(fbNetClient *cl, int w, int col, int row,
                   int width, int pct, fbncColor fg, fbncColor bg, bool show)
 {
-    char f[8],b[8]; _colorStr(f,fg); _colorStr(b,bg);
+    char f[16],b[8]; _colorStr(f,fg); _colorStr(b,bg);
     _send(cl,"progress,%d,%d,%d,%d,%d,%s,%s,%d",
           w,col,row,width,pct,f,b,show?1:0);
 }
@@ -487,14 +492,14 @@ void fbncProgress(fbNetClient *cl, int w, int col, int row,
 void fbncSpinner(fbNetClient *cl, int w, int col, int row,
                  int tick, fbncColor fg, fbncColor bg)
 {
-    char f[8],b[8]; _colorStr(f,fg); _colorStr(b,bg);
+    char f[16],b[8]; _colorStr(f,fg); _colorStr(b,bg);
     _send(cl,"spinner,%d,%d,%d,%d,%s,%s",w,col,row,tick,f,b);
 }
 
 void fbncTick(fbNetClient *cl, int w, int col, int row,
               fbncColor fg, fbncColor bg)
 {
-    char f[8],b[8]; _colorStr(f,fg); _colorStr(b,bg);
+    char f[16],b[8]; _colorStr(f,fg); _colorStr(b,bg);
     _send(cl,"tick,%d,%d,%d,%s,%s",w,col,row,f,b);
 }
 
@@ -502,7 +507,7 @@ void fbncGauge(fbNetClient *cl, int w, int col, int row,
                int height, int value, int maxVal,
                fbncColor fg, fbncColor bg)
 {
-    char f[8],b[8]; _colorStr(f,fg); _colorStr(b,bg);
+    char f[16],b[8]; _colorStr(f,fg); _colorStr(b,bg);
     _send(cl,"gauge,%d,%d,%d,%d,%d,%d,%s,%s",
           w,col,row,height,value,maxVal,f,b);
 }
@@ -511,7 +516,7 @@ void fbncSparkline(fbNetClient *cl, int w, int col, int row,
                    int width, fbncColor fg, fbncColor bg,
                    const float *values, int nValues)
 {
-    char f[8],b[8]; _colorStr(f,fg); _colorStr(b,bg);
+    char f[16],b[8]; _colorStr(f,fg); _colorStr(b,bg);
     char buf[2048];
     int len = snprintf(buf, sizeof(buf),
                        "sparkline,%d,%d,%d,%d,%s,%s",
@@ -523,13 +528,13 @@ void fbncSparkline(fbNetClient *cl, int w, int col, int row,
 
 void fbncScrollUp(fbNetClient *cl, int w, int n, fbncColor bg)
 {
-    char b[8]; _colorStr(b,bg);
+    char b[16]; _colorStr(b,bg);
     _send(cl,"scroll_up,%d,%d,%s",w,n,b);
 }
 
 void fbncScrollDown(fbNetClient *cl, int w, int n, fbncColor bg)
 {
-    char b[8]; _colorStr(b,bg);
+    char b[16]; _colorStr(b,bg);
     _send(cl,"scroll_down,%d,%d,%s",w,n,b);
 }
 
@@ -665,7 +670,7 @@ void fbncCustomBorder(fbNetClient *cl, int win,
                       int tl, int tr, int bl, int br,
                       int h,  int v,  fbncColor color)
 {
-    char c[8]; _colorStr(c, color);
+    char c[16]; _colorStr(c, color);
     _send(cl, "custom_border,%d,%d,%d,%d,%d,%d,%d,%s",
           win, tl, tr, bl, br, h, v, c);
 }
@@ -680,7 +685,7 @@ int fbncMenuDlg(fbNetClient *cl, int col, int row,
                 fbncBorder border,
                 const char **labels, const int *ids, int nItems)
 {
-    char f[8],b[8],fs[8],bs[8];
+    char f[16],b[8],fs[8],bs[8];
     _colorStr(f,fg); _colorStr(b,bg); _colorStr(fs,fgSel); _colorStr(bs,bgSel);
 
     char buf[2048];

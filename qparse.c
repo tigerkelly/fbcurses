@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2015 Richard Kelly Wiles (rkwiles@twc.com)
  *
@@ -21,54 +20,54 @@
  * SOFTWARE.
  */
 
-/* Originally written in 05/28/1988, modified to bring it up to coding and format standards. */
-
-#include <string.h>
-char *strqtok_r (char *s1, const char *s2, char **saveptr);
-
+#include "strqtok_r.h"
+#include "qparse.h"
 /*
- * This function qparse tokenizes a string based on the characters passed in.
- * If a string has the following pattern.
+ * qparse — tokenise a string into an array of pointers.
+ *
+ * This function tokenises a string based on the characters passed in.
+ * If a string has the following pattern:
  *     The,end,,,is,"very near".
  * The above string will return a token count of 4 and the following in the args array.
  *   args[0] = "The";
  *   args[1] = "end";
  *   args[2] = "is";
- *   args[3] = "very near.";		// removes the quotes from the string.
+ *   args[3] = "very near.";            // removes the quotes from the string.
  *   args[4] = NULL;
  *
  * The quote marks can be either single or double pairs but can not mix them on a token.
  *
- *   str = string to be tokenized.  This string is modified.
- *   chrs = characters to parse string by.
- *   argz = A pointer to an array of char * pointers. This array will contain the tokens found up to (max_args - 1).
- *   max_args = max number of pointers in the pointer array argz.
+ *   str      = string to be tokenised.  This string is modified.
+ *   chrs     = characters to parse string by.
+ *   argz     = A pointer to an array of char * pointers. This array will contain
+ *              the tokens found up to (max_argz - 1).
+ *   max_argz = max number of pointers in the pointer array argz.
  *
- *   returns number of tokens parsed which would be less than max_args.
+ *   returns number of tokens parsed which would be less than max_argz.
  *           The return pointer array is null terminated.
  */
-int qparse(char *str, const char *chrs, char **argz, int max_argz) {
-	if (!str || !chrs || !argz || max_argz <= 0) {
+int qparse(char *str, const char *chrs, char **argz, int max_argz)
+{
+    if (!str || !chrs || !argz || max_argz <= 0) {
         return 0;
     }
 
     char *saveptr;
     char *token;
-    int count = 0;
+    int   count = 0;
 
-    // We reserve the last slot for the NULL terminator
+    /* We reserve the last slot for the NULL terminator */
     int limit = max_argz - 1;
 
-    // Use strtok_r for thread safety
+    /* Use strqtok_r for thread safety */
     token = strqtok_r(str, chrs, &saveptr);
-
     while (token != NULL && count < limit) {
         argz[count++] = token;
         token = strqtok_r(NULL, chrs, &saveptr);
     }
 
-    // Always NULL terminate the array
+    /* Always NULL terminate the array */
     argz[count] = NULL;
 
-	return(count);					/* return count */
+    return count;                                       /* return count */
 }

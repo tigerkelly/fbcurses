@@ -39,17 +39,30 @@ typedef struct fbNetClient fbNetClient;
 /* ── Colour type (0xRRGGBB) ──────────────────────────────────────── */
 typedef uint32_t fbncColor;
 
-#define FBNC_RGB(r,g,b) ((fbncColor)(((r)<<16)|((g)<<8)|(b)))
-#define FBNC_BLACK       FBNC_RGB(  0,  0,  0)
-#define FBNC_WHITE       FBNC_RGB(255,255,255)
-#define FBNC_RED         FBNC_RGB(205, 49, 49)
-#define FBNC_GREEN       FBNC_RGB( 13,188,121)
-#define FBNC_BLUE        FBNC_RGB( 36,114,200)
-#define FBNC_YELLOW      FBNC_RGB(229,229, 16)
-#define FBNC_MAGENTA     FBNC_RGB(188, 63,188)
-#define FBNC_CYAN        FBNC_RGB( 17,168,205)
-#define FBNC_GRAY        FBNC_RGB(118,118,118)
-#define FBNC_TRANSPARENT FBNC_RGB(  0,  0,  0)
+#define FBNC_RGB(r,g,b)    ((fbncColor)(((r)<<16)|((g)<<8)|(b)))
+
+/* Standard colours — match the server's named colour table exactly */
+#define FBNC_BLACK          FBNC_RGB(  0,   0,   0)
+#define FBNC_WHITE          FBNC_RGB(255, 255, 255)
+#define FBNC_RED            FBNC_RGB(205,  49,  49)
+#define FBNC_GREEN          FBNC_RGB( 13, 188, 121)
+#define FBNC_BLUE           FBNC_RGB( 36, 114, 200)
+#define FBNC_YELLOW         FBNC_RGB(229, 229,  16)
+#define FBNC_MAGENTA        FBNC_RGB(188,  63, 188)
+#define FBNC_CYAN           FBNC_RGB( 17, 168, 205)
+#define FBNC_GRAY           FBNC_RGB(118, 118, 118)
+#define FBNC_GREY           FBNC_RGB(118, 118, 118)   /* alias */
+
+/* Bright variants */
+#define FBNC_BRIGHT_RED     FBNC_RGB(241,  76,  76)
+#define FBNC_BRIGHT_GREEN   FBNC_RGB( 35, 209, 139)
+#define FBNC_BRIGHT_BLUE    FBNC_RGB( 59, 142, 234)
+#define FBNC_BRIGHT_YELLOW  FBNC_RGB(245, 245,  67)
+#define FBNC_BRIGHT_MAGENTA FBNC_RGB(214, 112, 214)
+#define FBNC_BRIGHT_CYAN    FBNC_RGB( 41, 184, 219)
+
+/* Transparent — sentinel value; _colorStr() sends "transparent" to server */
+#define FBNC_TRANSPARENT    ((fbncColor)0xFF000000u)
 
 /* ── Attribute flags (match FB_ATTR_* in fbcurses.h) ────────────── */
 #define FBNC_ATTR_NONE      0x00
@@ -94,6 +107,9 @@ typedef enum {
 #define FBNC_FONT_THIN6X12 "thin6x12"
 #define FBNC_FONT_TALL8X14 "tall8x14"
 #define FBNC_FONT_WIDE    "wide"
+#define FBNC_FONT_12X24  "12x24"
+#define FBNC_FONT_16X32  "16x32"
+#define FBNC_FONT_24X48  "24x48"
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Connection
@@ -431,6 +447,13 @@ bool fbncSetMulticastInterface(fbNetClient *cl, const char *ifAddr);
 bool fbncIsMulticast(const fbNetClient *cl);
 
 /* Convenience: open a multicast client with sensible defaults */
+/** Predefined multicast group addresses (mirror of FB_NET_MCAST_* in fbnet.h).
+ *  Included here so client-only code need not include fbnet.h. */
+#define FBNC_MCAST_ALL    "239.76.66.49"   /**< All fbcurses displays on subnet */
+#define FBNC_MCAST_ZONE1  "239.76.66.50"   /**< Zone 1 */
+#define FBNC_MCAST_ZONE2  "239.76.66.51"   /**< Zone 2 */
+#define FBNC_MCAST_ZONE3  "239.76.66.52"   /**< Zone 3 */
+
 #define fbncOpenMcast(group, port)  fbncOpenMulticast(group, port, 1, false)
 
 

@@ -681,7 +681,66 @@ typedef enum {
 int fbMsgBox(fbScreen *scr, const char *title, const char *msg,
              fbMsgBoxButtons buttons, fbToastKind kind);
 
-int parse(char *str, const char *chrs, char **argz, int max_argz);
-int qparse(char *str, const char *chrs, char **argz, int max_argz);
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  Virtual Console (VT) switching
+ *
+ *  Linux supports up to 63 virtual consoles (VT1–VT63).  These
+ *  functions let your program switch VTs programmatically rather than
+ *  requiring the user to press Alt-Fn or Ctrl-Alt-Fn.
+ *
+ *  Typical use:
+ *    int myVt = fbVtCurrent(scr);          // which VT am I on?
+ *    fbVtSwitch(scr, myVt + 1);            // move to next VT
+ *    fbVtSwitch(scr, myVt);               // come back
+ *
+ *    int free = fbVtOpenFree(scr);         // allocate a fresh VT
+ *    fbVtSwitch(scr, free);               // switch to it
+ *    // ... draw something ...
+ *    fbVtSwitch(scr, myVt);               // return home
+ *    fbVtClose(scr, free);                // release the VT
+ *
+ *  Notes:
+ *    - You normally need to be root or in the 'tty' group.
+ *    - VT numbers are 1-based (VT1 = tty1, VT2 = tty2, …).
+ *    - fbVtSwitch() calls fbFlush() first so the screen is clean on
+ *      the new VT.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * fbVtCurrent — return the VT number this process is running on.
+ * Returns 0 if the VT number could not be determined.
+ */
+int fbVtCurrent(const fbScreen *scr);
+
+/**
+ * fbVtSwitch — switch the active display to VT number @vt.
+ *
+ * Immediately changes the visible console; your program continues
+ * running on the new VT.  Pass @waitActive=true to block until the
+ * VT is actually foregrounded (useful before drawing).
+ *
+ * Returns true on success.
+ */
+bool fbVtSwitch(fbScreen *scr, int vt, bool waitActive);
+
+/**
+ * fbVtOpenFree — allocate the next unused VT and return its number.
+ * Returns -1 if no free VT is available or the ioctl fails.
+ */
+int fbVtOpenFree(fbScreen *scr);
+
+/**
+ * fbVtClose — deallocate a VT that was previously opened with
+ * fbVtOpenFree().  Do not close the VT you are currently on.
+ * Returns true on success.
+ */
+bool fbVtClose(fbScreen *scr, int vt);
+
+/**
+ * fbVtCount — return the total number of VTs configured in the kernel
+ * (NR_CONSOLES, typically 63).  Returns -1 on error.
+ */
+int fbVtCount(fbScreen *scr);
 
 #endif /* FBCURSES_H */

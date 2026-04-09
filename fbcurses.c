@@ -218,6 +218,22 @@ fbScreen *fbInit(const char *device)
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
     scr->rawMode = true;
 
+    /* Open the controlling console for VT ioctls.
+       /dev/tty always refers to the process's controlling terminal — the
+       active VT we're running on — without needing to know its number.  */
+    scr->ttyFd = open("/dev/tty", O_RDWR | O_NOCTTY);
+    if (scr->ttyFd < 0) {
+        /* Fall back to STDIN if /dev/tty is unavailable (rare) */
+        scr->ttyFd = STDIN_FILENO;
+    }
+
+    /* Discover which VT number we are on */
+    {
+        struct vt_stat vtst;
+        if (ioctl(scr->ttyFd, VT_GETSTATE, &vtst) == 0)
+            scr->vtNum = vtst.v_active;
+    }
+
     /* Hide the text cursor */
     fbSetCursor(scr, false);
 
@@ -260,6 +276,8 @@ void fbShutdown(fbScreen *scr)
         munmap(scr->fbMem, scr->memLen);
     free(scr->backBuf);
     close(scr->fd);
+    if (scr->ttyFd > STDERR_FILENO)   /* don't close STDIN fallback */
+        close(scr->ttyFd);
     free(scr);
 }
 
@@ -1093,4 +1111,62 @@ fbColor fbLerp(fbColor a, fbColor b, float t)
         (uint8_t)(FB_COLOR_G(a) * s + FB_COLOR_G(b) * t),
         (uint8_t)(FB_COLOR_B(a) * s + FB_COLOR_B(b) * t)
     );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  Virtual Console switching
+ * ═══════════════════════════════════════════════════════════════════ */
+
+int fbVtCurrent(const fbScreen *scr)
+{
+    if (!scr) return 0;
+    /* Return the cached value set at fbInit time */
+    if (scr->vtNum > 0) return scr->vtNum;
+    /* Re-query in case it was not set */
+    struct vt_stat vtst;
+    if (scr->ttyFd >= 0 && ioctl(scr->ttyFd, VT_GETSTATE, &vtst) == 0)
+        return vtst.v_active;
+    return 0;
+}
+
+bool fbVtSwitch(fbScreen *scr, int vt, bool waitActive)
+{
+    if (!scr || vt < 1 || vt > 63) return false;
+
+    /* Flush the back-buffer before leaving so the display is clean */
+    fbFlush(scr);
+
+    if (ioctl(scr->ttyFd, VT_ACTIVATE, vt) < 0)
+        return false;
+
+    if (waitActive) {
+        /* Block until the requested VT is actually foregrounded */
+        ioctl(scr->ttyFd, VT_WAITACTIVE, vt);
+    }
+
+    return true;
+}
+
+int fbVtOpenFree(fbScreen *scr)
+{
+    if (!scr) return -1;
+    int freeVt = -1;
+    if (ioctl(scr->ttyFd, VT_OPENQRY, &freeVt) < 0)
+        return -1;
+    return freeVt;   /* -1 if none available */
+}
+
+bool fbVtClose(fbScreen *scr, int vt)
+{
+    if (!scr || vt < 1) return false;
+    /* VT_DISALLOCATE releases a VT that is not currently active */
+    return ioctl(scr->ttyFd, VT_DISALLOCATE, vt) == 0;
+}
+
+int fbVtCount(fbScreen *scr)
+{
+    if (!scr) return -1;
+    /* The kernel supports up to 63 virtual consoles by default */
+    (void)scr;
+    return 63;
 }
