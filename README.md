@@ -35,7 +35,8 @@ int main(void) {
 ```
 
 ```sh
-make && sudo ./demo
+make && sudo ./demo/usermod
+
 ```
 
 Ctrl-C or pressing `q`/`Esc` exits cleanly from any demo — the terminal and
@@ -473,6 +474,17 @@ python3 examples/multicast_demo.py
 ---
 
 ## Requirements
+
+```sh
+  sudo apt install -y \
+    build-essential \
+    libpng-dev \
+    libjpeg-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libavutil-dev
+```
 
 - Linux kernel with `CONFIG_FB` (framebuffer support)
 - `/dev/fb0` readable and writable:
