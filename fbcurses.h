@@ -4,6 +4,8 @@
 /*
  * fbcurses.h — Linux Framebuffer TUI Library
  * A ncurses-style API for direct framebuffer rendering.
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #include <stdint.h>

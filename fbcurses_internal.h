@@ -1,6 +1,10 @@
 #ifndef FBCURSES_INTERNAL_H
 #define FBCURSES_INTERNAL_H
 
+/*
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
+ */
+
 #include "fbcurses.h"
 #include "fonts.h"
 

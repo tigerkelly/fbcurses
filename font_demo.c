@@ -6,6 +6,8 @@
  *   sudo ./font_demo
  *
  * Shows every built-in font, then demonstrates the new widgets.
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #define _POSIX_C_SOURCE 200809L

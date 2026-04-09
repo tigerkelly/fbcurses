@@ -4,6 +4,8 @@
 /*
  * fonts.h — Font descriptor and built-in font declarations for fbcurses.
  *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
+ *
  * Each font is described by an fbFont struct that carries its name,
  * pixel dimensions, and a pointer to its 256-glyph bitmap table.
  *

@@ -4,6 +4,8 @@
 /*
  * fbnet_client.h — C client library for the fbcurses UDP protocol.
  *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
+ *
  * Provides a simple, synchronous API that mirrors the fbcurses drawing
  * functions, translating each call into a UDP packet sent to a remote
  * fbcurses server (see fbnet.h / fbnet.c).

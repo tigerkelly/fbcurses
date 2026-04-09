@@ -7,6 +7,8 @@
  *
  * Run (needs /dev/fb0 access):
  *   sudo ./demo
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #include "fbcurses.h"

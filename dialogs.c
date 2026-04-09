@@ -4,6 +4,8 @@
  *   fbFilePicker  — scrollable directory browser
  *   fbColorPicker — 24-row × 32-col colour swatch palette
  *   fbMsgBox      — configurable modal message box
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #define _POSIX_C_SOURCE 200809L

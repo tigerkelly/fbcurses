@@ -9,6 +9,8 @@
  *   Table / data-grid
  *   Vertical gauge
  *   Sparkline chart
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #define _POSIX_C_SOURCE 200809L

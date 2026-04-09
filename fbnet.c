@@ -2,6 +2,8 @@
  * fbnet.c — UDP remote-rendering server for fbcurses.
  *
  * See fbnet.h for the full protocol specification.
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #define _POSIX_C_SOURCE 200809L

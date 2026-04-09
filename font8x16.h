@@ -4,6 +4,8 @@
  * Each entry is FB_FONT_H (16) bytes.  Each byte is one pixel row,
  * MSB = leftmost column.  Glyphs 0x00–0x1F and 0x80–0xFF are blank
  * (rendered as spaces); 0x20–0x7E are printable ASCII.
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #ifndef FONT8X16_H

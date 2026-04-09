@@ -4,6 +4,8 @@
 /*
  * fbnet.h — UDP remote-rendering API for fbcurses
  *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
+ *
  * ═══════════════════════════════════════════════════════════════════
  * PROTOCOL
  * ═══════════════════════════════════════════════════════════════════

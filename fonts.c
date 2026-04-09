@@ -1,6 +1,8 @@
 /*
  * fonts.c — Font registry: wraps the VGA bitmap data in an fbFont
  *           descriptor, and provides the global fbFontList[] array.
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #include "fonts.h"

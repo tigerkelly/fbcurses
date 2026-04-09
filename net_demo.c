@@ -1,6 +1,8 @@
 /*
  * net_demo.c — fbcurses UDP remote-rendering server demo.
  *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
+ *
  * Starts the UDP server, runs a self-test that exercises the full
  * protocol, then enters fbNetRun() so external clients can drive
  * the framebuffer display.

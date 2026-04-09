@@ -1,5 +1,7 @@
 /*
  * fbcurses.c — Screen, window, drawing, text, input implementation.
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 

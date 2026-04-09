@@ -12,6 +12,8 @@
  *   thin  : 1 px
  *   thick : 2 px
  *   double: two parallel 1-px strokes offset ±1 from centre
+ *
+ * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #include "fbcurses_internal.h"
