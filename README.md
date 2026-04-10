@@ -389,22 +389,24 @@ fbImage *fbImageScaleFit(const fbImage *src, int maxW, int maxH);
 ```c
 #include "fbimage.h"
 
-fbScreen *scr = fbInit(NULL);
+int main(void) {
+	fbScreen *scr = fbInit(NULL);
 
-// Full-screen, aspect-ratio preserved
-fbImage *img = fbImageLoad("photo.jpg");
-fbImageDrawScaled(scr, img, 0, 0, fbWidth(scr), fbHeight(scr));
-fbFlush(scr);
-fbImageFree(img);
+	// Full-screen, aspect-ratio preserved
+	fbImage *img = fbImageLoad("photo.jpg");
+	fbImageDrawScaled(scr, img, 0, 0, fbWidth(scr), fbHeight(scr));
+	fbFlush(scr);
+	fbImageFree(img);
 
-// Fit into an fbWindow
-fbWindow *win = fbNewWindow(scr, 5, 3, 70, 35);
-fbImage  *img2 = fbImageLoad("banner.png");
-fbImageDrawInWindow(win, img2, /*keepAspect=*/true);
-fbFlush(scr);
-fbImageFree(img2);
+	// Fit into an fbWindow
+	fbWindow *win = fbNewWindow(scr, 5, 3, 70, 35);
+	fbImage  *img2 = fbImageLoad("banner.png");
+	fbImageDrawInWindow(win, img2, /*keepAspect=*/true);
+	fbFlush(scr);
+	fbImageFree(img2);
 
-fbShutdown(scr);
+	fbShutdown(scr);
+}
 ```
 
 ---
