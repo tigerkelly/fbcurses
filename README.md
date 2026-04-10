@@ -3,20 +3,16 @@
 A **ncurses-style TUI library for the Linux framebuffer** (`/dev/fb*`), written in C11.
 Renders directly to `/dev/fb*` — no X11, no Wayland, no ncurses.
 
-Also includes a **UDP remote-rendering server** so any machine on the network
-can drive the display using a simple CSV-over-UDP protocol, with client libraries
-in C and Python.
+Also includes **image loading and display** (BMP, PNG, JPEG), **video playback**
+(any format FFmpeg supports), and a **UDP remote-rendering server** so any machine
+on the network can drive the display using a simple CSV-over-UDP protocol, with
+client libraries in C and Python.
 
 ---
 
 ## Quick start
 
 ```c
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-
 #include "fbcurses.h"
 
 int main(void) {
@@ -35,8 +31,7 @@ int main(void) {
 ```
 
 ```sh
-make && sudo ./demo/usermod
-
+make && sudo ./demo
 ```
 
 Ctrl-C or pressing `q`/`Esc` exits cleanly from any demo — the terminal and
@@ -45,6 +40,8 @@ framebuffer state are always restored, even on crash.
 ---
 
 ## Build
+
+Install dependencies first (see [Requirements](#requirements)), then:
 
 ```sh
 make              # builds libfbcurses.a + demo, font_demo, net_demo
@@ -55,7 +52,17 @@ make clean
 Link your own program:
 
 ```sh
-gcc -O2 -I/usr/local/include myapp.c -L/usr/local/lib -lfbcurses -lm -o myapp
+gcc -O2 -I. myapp.c -L. -lfbcurses -lm -o myapp
+
+# With image support:
+gcc -O2 -I. -DFBIMAGE_PNG -DFBIMAGE_JPEG \
+    myapp.c -L. -lfbcurses -lm -lpng -ljpeg -o myapp
+
+# With image + video support:
+gcc -O2 -I. -DFBIMAGE_PNG -DFBIMAGE_JPEG \
+    myapp.c -L. -lfbcurses -lm \
+    $(pkg-config --libs libavcodec libavformat libswscale libavutil) \
+    -lpng -ljpeg -o myapp
 ```
 
 ---
@@ -129,8 +136,18 @@ void fbMoveWindow(fbWindow *win, int col, int row);
 void fbResizeWindow(fbWindow *win, int cols, int rows);
 void fbClearWindow(fbWindow *win, fbColor bg);
 void fbRefresh(fbWindow *win);
-int  fbWindowCols(const fbWindow *win);
-int  fbWindowRows(const fbWindow *win);
+
+// Character-cell dimensions
+int fbWindowCols(const fbWindow *win);
+int fbWindowRows(const fbWindow *win);
+
+// Pixel dimensions — account for the active font's cell size
+fbScreen *fbWindowGetScreen(const fbWindow *win);
+int fbWindowPixelX(const fbWindow *win);   // left edge in pixels
+int fbWindowPixelY(const fbWindow *win);   // top edge in pixels
+int fbWindowPixelW(const fbWindow *win);   // width in pixels
+int fbWindowPixelH(const fbWindow *win);   // height in pixels
+
 void fbSetFont(fbWindow *win, const fbFont *font);
 const fbFont *fbGetFont(const fbWindow *win);
 ```
@@ -250,16 +267,163 @@ bool fbVtClose(fbScreen *scr, int vt);               // release an allocated VT
 int  fbVtCount(fbScreen *scr);                       // total VTs (typically 63)
 ```
 
+> Requires root or membership in the `tty` group.
+
+---
+
+## Image support (`fbimage.h`)
+
+Load and display BMP, PNG, and JPEG images directly on the framebuffer.
+The format is detected from the file's magic bytes, not the filename extension.
+
+Build with `-DFBIMAGE_PNG -DFBIMAGE_JPEG -lpng -ljpeg` to enable all formats.
+BMP works with no extra dependencies.
+
+### Loading
 ```c
-int home  = fbVtCurrent(scr);       // e.g. 2
-int fresh = fbVtOpenFree(scr);      // allocate e.g. VT 7
-fbVtSwitch(scr, fresh, true);       // switch there and wait until active
-// ... draw on the new VT ...
-fbVtSwitch(scr, home, true);        // return home
-fbVtClose(scr, fresh);              // release VT 7
+fbImage *fbImageLoad(const char *path);          // auto-detect BMP/PNG/JPEG
+fbImage *fbImageLoadBMP(const char *path);       // BMP only (no dependencies)
+fbImage *fbImageLoadPNG(const char *path);       // PNG  (requires -DFBIMAGE_PNG)
+fbImage *fbImageLoadJPEG(const char *path);      // JPEG (requires -DFBIMAGE_JPEG)
+fbImage *fbImageFromRGBA(int w, int h,
+                          const uint8_t *pixels); // create from existing RGBA data
+void     fbImageFree(fbImage *img);
 ```
 
-> Requires root or membership in the `tty` group.
+If loading fails, `fbImageLoad` prints the reason to stderr (file not found,
+unsupported format, missing compile-time flags, etc.) and returns NULL.
+
+### Drawing
+```c
+// Draw at native size
+void fbImageDraw(fbScreen *scr, const fbImage *img, int x, int y);
+
+// Draw scaled to (dstW x dstH) — bilinear interpolation
+// Pass 0 for one dimension to scale proportionally
+void fbImageDrawScaled(fbScreen *scr, const fbImage *img,
+                       int x, int y, int dstW, int dstH);
+
+// Draw a sub-region, optionally scaled
+void fbImageDrawRegion(fbScreen *scr, const fbImage *img,
+                       int srcX, int srcY, int srcW, int srcH,
+                       int dstX, int dstY, int dstW, int dstH);
+
+// Draw scaled to fill an fbWindow — position and size computed automatically
+void fbImageDrawInWindow(fbWindow *win, const fbImage *img, bool keepAspect);
+void fbImageDrawInWindowRegion(fbWindow *win, const fbImage *img,
+                                int srcX, int srcY, int srcW, int srcH,
+                                bool keepAspect);
+```
+
+`fbImageDrawInWindow` with `keepAspect=true` letterboxes or pillarboxes the
+image to fit the window while preserving the aspect ratio, centred within
+the window's pixel bounds. With `keepAspect=false` it stretches to fill exactly.
+
+### Scaling helpers
+```c
+fbImage *fbImageScale(const fbImage *src, int newW, int newH);
+fbImage *fbImageScaleFit(const fbImage *src, int maxW, int maxH);
+```
+
+### Example
+```c
+#include "fbimage.h"
+
+fbScreen *scr = fbInit(NULL);
+
+// Full-screen, aspect-ratio preserved
+fbImage *img = fbImageLoad("photo.jpg");
+fbImageDrawScaled(scr, img, 0, 0, fbWidth(scr), fbHeight(scr));
+fbFlush(scr);
+fbImageFree(img);
+
+// Fit into an fbWindow
+fbWindow *win = fbNewWindow(scr, 5, 3, 70, 35);
+fbImage  *img2 = fbImageLoad("banner.png");
+fbImageDrawInWindow(win, img2, /*keepAspect=*/true);
+fbFlush(scr);
+fbImageFree(img2);
+
+fbShutdown(scr);
+```
+
+---
+
+## Video support (`fbvideo.h`)
+
+Play any video format FFmpeg supports (MP4, AVI, MKV, WebM, MOV, FLV, …)
+directly on the framebuffer. Requires libavcodec, libavformat, libswscale,
+and libavutil.
+
+### Simple one-call playback
+```c
+// Full-screen, aspect-ratio preserved; q/Esc stops playback
+fbVideoPlay(scr, "movie.mp4", 0, 0, 0, 0);
+
+// In a specific rectangle (pixels)
+fbVideoPlay(scr, "clip.mp4", 100, 100, 800, 450);
+
+// Play in an fbWindow
+fbVideoPlayInWindow(win, "clip.mp4", /*keepAspect=*/true);
+
+// With options
+fbVideoOpts opts = {
+    .x = 0, .y = 0, .width = 0, .height = 0,
+    .loop = true, .keepAspect = true, .speedFactor = 1.0
+};
+fbVideoPlayOpts(scr, "loop.mp4", &opts);
+```
+
+### Frame-by-frame interface
+```c
+fbVideo *vid = fbVideoOpen("movie.mp4");
+printf("%.1f fps, %.1fs\n", fbVideoFPS(vid), fbVideoDuration(vid));
+
+fbImage frame = {0};   // reused across frames — no per-frame alloc
+
+// Decode and scale to 1280x720
+while (fbVideoNextFrame(vid, &frame, 1280, 720)) {
+    fbImageDraw(scr, &frame, 0, 0);
+    fbFlush(scr);
+    // ... overlay text, react to keys ...
+}
+free(frame.pixels);
+fbVideoClose(vid);
+
+// Or decode directly into a window
+fbVideo *vid2 = fbVideoOpen("clip.mp4");
+fbImage  frame2 = {0};
+while (fbVideoNextFrameInWindow(vid2, &frame2, win, true)) {
+    fbRefresh(overlay_win);   // draw HUD on top
+    fbFlush(scr);
+}
+free(frame2.pixels);
+fbVideoClose(vid2);
+```
+
+### API reference
+```c
+fbVideoResult fbVideoPlay(fbScreen *scr, const char *path,
+                           int x, int y, int width, int height);
+fbVideoResult fbVideoPlayOpts(fbScreen *scr, const char *path,
+                               const fbVideoOpts *opts);
+fbVideoResult fbVideoPlayInWindow(fbWindow *win, const char *path,
+                                   bool keepAspect);
+
+fbVideo *fbVideoOpen(const char *path);
+int      fbVideoWidth(const fbVideo *vid);
+int      fbVideoHeight(const fbVideo *vid);
+double   fbVideoFPS(const fbVideo *vid);
+double   fbVideoDuration(const fbVideo *vid);
+bool     fbVideoNextFrame(fbVideo *vid, fbImage *img, int dstW, int dstH);
+bool     fbVideoNextFrameInWindow(fbVideo *vid, fbImage *frame,
+                                   fbWindow *win, bool keepAspect);
+bool     fbVideoSeek(fbVideo *vid, double seconds);
+void     fbVideoClose(fbVideo *vid);
+```
+
+Return codes: `FB_VIDEO_OK` (played to end), `FB_VIDEO_STOPPED` (user quit),
+`FB_VIDEO_ERR_OPEN`, `FB_VIDEO_ERR_CODEC`, `FB_VIDEO_ERR_MEM`.
 
 ---
 
@@ -311,51 +475,38 @@ Font names in the protocol: `vga`, `bold8`, `thin5`, `narrow6`, `block8`,
 ### Shell one-liners
 
 ```sh
-# Ping
 echo "ping" | nc -u -q1 127.0.0.1 9876
 
-# Create window and write text — all in one datagram
 printf "win_new,2,2,60,10\ncolors,1,#00FF88,black\nprint_at,1,4,3,\"Hello!\"\nwin_refresh,1\nflush\n" \
   | nc -u -q1 127.0.0.1 9876
 
-# Large font
 echo "print_px,50,100,\"Hello\",bright_cyan,black,none,16x32" \
   | nc -u -q1 127.0.0.1 9876
 echo "flush" | nc -u -q1 127.0.0.1 9876
-
-# Progress bar animation
-for i in $(seq 0 5 100); do
-  printf "progress,1,2,3,56,$i,#3399FF,#222244,1\nwin_refresh,1\nflush\n" \
-    | nc -u -q1 127.0.0.1 9876
-  sleep 0.1
-done
 ```
 
 ### Multicast — one packet, many displays
 
 ```sh
-# Every net_demo on the subnet receives these:
 echo "clear,black" | nc -u 239.76.66.49 9876
 printf "print_px,50,100,\"All displays!\",bright_yellow,black,none,16x32\nflush\n" \
   | nc -u 239.76.66.49 9876
 
-# Join a group at runtime
 echo "subscribe,239.76.66.49" | nc -u -q1 192.168.1.10 9876
 ```
 
 | Constant | Address | Purpose |
 |---|---|---|
-| `FB_NET_MCAST_ALL` | `239.76.66.49` | All fbcurses displays |
-| `FB_NET_MCAST_ZONE1` | `239.76.66.50` | Zone 1 |
-| `FB_NET_MCAST_ZONE2` | `239.76.66.51` | Zone 2 |
-| `FB_NET_MCAST_ZONE3` | `239.76.66.52` | Zone 3 |
+| `FB_NET_MCAST_ALL` / `FBNC_MCAST_ALL` | `239.76.66.49` | All fbcurses displays |
+| `FB_NET_MCAST_ZONE1` / `FBNC_MCAST_ZONE1` | `239.76.66.50` | Zone 1 |
+| `FB_NET_MCAST_ZONE2` / `FBNC_MCAST_ZONE2` | `239.76.66.51` | Zone 2 |
+| `FB_NET_MCAST_ZONE3` / `FBNC_MCAST_ZONE3` | `239.76.66.52` | Zone 3 |
 
 ### Python client
 
 ```python
 from fbnet_client import FbNet, FbNetMulticast, Color, Border, Font, Attr
 
-# Unicast
 with FbNet("127.0.0.1", 9876) as fb:
     win = fb.win_new(2, 2, 60, 14)
     fb.title_bar(win, "Remote UI", Border.DOUBLE,
@@ -367,7 +518,6 @@ with FbNet("127.0.0.1", 9876) as fb:
         fb.win_refresh(win)
         fb.flush()
 
-# Multicast — all displays at once
 with FbNetMulticast(FbNetMulticast.FB_NET_MCAST_ALL, 9876) as mc:
     mc.clear(Color.BLACK)
     mc.print_px(50, 100, "Hello everyone", Color.BRIGHT_YELLOW,
@@ -378,61 +528,30 @@ with FbNetMulticast(FbNetMulticast.FB_NET_MCAST_ALL, 9876) as mc:
 ### C client
 
 ```c
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-
-#include "fbcurses.h"
-#include "fbnet.h"
 #include "fbnet_client.h"
 
-// Unicast
-int main(int argc, char *argv[]) {
-    char ip[18];
-    unsigned short port;
+fbNetClient *cl = fbncOpen("127.0.0.1", 9876);
+int win = fbncWinNew(cl, 2, 2, 60, 14);
+fbncTitleBar(cl, win, "Hello", FBNC_BORDER_DOUBLE,
+             FBNC_CYAN, FBNC_BLACK, FBNC_CYAN);
+fbncPrintAtFmt(cl, win, 4, 4, "Hello from C!");
+fbncPrintPx(cl, 50, 200, "Big text", FBNC_BRIGHT_CYAN, FBNC_BLACK,
+            FBNC_ATTR_NONE, "16x32");
+fbncRefreshFlush(cl, win);
+fbncClose(cl);
 
-    strcpy(ip, "127.0.0.1");
-    port = 9876;
-
-    for (int i = 1; i < argc; i++) {
-        if (strncmp(argv[i], "-a", 2) == 0) {
-            strcpy(ip, argv[i+1]);
-        } else if (strncmp(argv[i], "-p", 2) == 0) {
-            port = (unsigned short)atoi(argv[i+1]);
-        }
-    }
-
-    fbNetClient *cl = fbncOpen(ip, port);
-    int win = fbncWinNew(cl, 2, 2, 60, 14);
-    fbncTitleBar(cl, win, "Hello", FBNC_BORDER_DOUBLE,
-                 FBNC_CYAN, FBNC_BLACK, FBNC_CYAN);
-    fbncPrintAtFmt(cl, win, 4, 4, "Hello from C!");
-    fbncPrintPx(cl, 50, 200, "Big text", FBNC_BRIGHT_CYAN, FBNC_BLACK,
-                FBNC_ATTR_NONE, "16x32");
-    fbncRefreshFlush(cl, win);
-    fbncClose(cl);
-
-    // Multicast
-    fbNetClient *mc = fbncOpenMcast(FB_NET_MCAST_ALL, port);
-    fbncClear(mc, 0x000000);
-    fbncRefreshAllFlush(mc);
-    fbncClose(mc);
-
-    return 0;
-}
+fbNetClient *mc = fbncOpenMcast(FBNC_MCAST_ALL, 9876);
+fbncClear(mc, 0x000000);
+fbncRefreshAllFlush(mc);
+fbncClose(mc);
 ```
 
 ---
 
 ## Tokeniser utilities
 
-The protocol dispatcher uses two reusable tokenising utilities that are
-also available to application code:
-
 **`strqtok_r`** — quote-aware re-entrant tokeniser (R. K. Wiles, 1988/2015).
-Like `strtok_r` but treats `'…'` or `"…"` as a single token, stripping
-the quotes.
+Like `strtok_r` but treats `'…'` or `"…"` as a single token, stripping quotes.
 
 ```c
 #include "strqtok_r.h"
@@ -456,9 +575,22 @@ int n = qparse(buf, "\t\n ,", args, 16);
 ## Examples
 
 ```sh
+# TUI examples (no extra libs needed)
 gcc -O2 -I. examples/clock.c   -L. -lfbcurses -lm -o clock
 gcc -O2 -I. examples/sysmon.c  -L. -lfbcurses -lm -o sysmon
 gcc -O2 -I. examples/logview.c -L. -lfbcurses -lm -o logview
+
+# Image viewer
+gcc -O2 -I. -DFBIMAGE_PNG -DFBIMAGE_JPEG \
+    examples/imageview.c -L. -lfbcurses -lm -lpng -ljpeg -o imageview
+
+# Video player
+gcc -O2 -I. -DFBIMAGE_PNG -DFBIMAGE_JPEG \
+    examples/videoplayer.c -L. -lfbcurses -lm \
+    $(pkg-config --libs libavcodec libavformat libswscale libavutil) \
+    -lpng -ljpeg -o videoplayer
+
+# Python examples
 python3 examples/remote_dashboard.py 127.0.0.1 9876
 python3 examples/multicast_demo.py
 ```
@@ -468,15 +600,42 @@ python3 examples/multicast_demo.py
 | `examples/clock.c` | Real-time LCD clock with second progress bar |
 | `examples/sysmon.c` | CPU/memory/network monitor with gauges and sparklines |
 | `examples/logview.c` | Live log tail, colour-coded severity, keyword filter |
+| `examples/imageview.c` | Image viewer (BMP/PNG/JPEG) with zoom, pan, and window support |
+| `examples/videoplayer.c` | Video player with HUD, seek, speed control, and window support |
 | `examples/remote_dashboard.py` | Animated Python UDP dashboard |
 | `examples/multicast_demo.py` | 5-slide broadcast demo sent to all displays at once |
+
+### imageview
+
+```sh
+sudo ./imageview photo.jpg                         # full screen
+sudo ./imageview -wp 0 0 800 600 photo.jpg         # 800x600 pixel window
+sudo ./imageview -wp 100 100 640 480 photo.jpg     # offset window
+sudo ./imageview -w 0 0 80 30 photo.jpg            # cell-based window
+sudo ./imageview photo1.jpg photo2.jpg photo3.jpg  # slideshow
+```
+
+Keys: `Right`/`Space` next, `Left` prev, `f` fit/1:1, `z`/`Z` zoom, arrows pan, `i` info bar, `q` quit.
+
+### videoplayer
+
+```sh
+sudo ./videoplayer movie.mp4                       # full screen
+sudo ./videoplayer -wp 0 0 800 600 movie.mp4       # pixel window
+sudo ./videoplayer -wp 100 100 640 480 clip.mp4    # offset window
+sudo ./videoplayer -s 1.5 -t 30 movie.mp4          # 1.5× speed, start at 30s
+sudo ./videoplayer -l movie.mp4                    # loop
+sudo ./videoplayer clip1.mp4 clip2.mp4 clip3.mp4   # playlist
+```
+
+Keys: `Space`/`p` pause, `←`/`→` seek ±10s, `↑`/`↓` speed ±25%, `n` next, `r` restart, `h` HUD, `q` quit.
 
 ---
 
 ## Requirements
 
 ```sh
-  sudo apt install -y \
+sudo apt install -y \
     build-essential \
     libpng-dev \
     libjpeg-dev \
@@ -486,18 +645,32 @@ python3 examples/multicast_demo.py
     libavutil-dev
 ```
 
-- Linux kernel with `CONFIG_FB` (framebuffer support)
-- `/dev/fb0` readable and writable:
-  ```sh
-  sudo usermod -aG video $USER   # then log out and back in
-  ```
-- Run on a virtual console, not inside X11 or Wayland:
-  ```sh
-  Ctrl-Alt-F2    # switch to VT2
-  Ctrl-Alt-F1    # return to desktop
-  ```
-- Or switch programmatically: `fbVtSwitch(scr, 2, true)` (requires root or `tty` group)
-- Tested on: desktop VTs, Raspberry Pi, QEMU virtio-vga, KMS/DRM fbdev
+| Package | Used for |
+|---|---|
+| `build-essential` | `gcc`, `make`, `ar` |
+| `libpng-dev` | PNG image loading |
+| `libjpeg-dev` | JPEG image loading |
+| `libavcodec-dev` | FFmpeg video decoding |
+| `libavformat-dev` | FFmpeg container/demuxer (MP4, MKV, AVI…) |
+| `libswscale-dev` | FFmpeg pixel format conversion / scaling |
+| `libavutil-dev` | FFmpeg shared utilities |
+
+The framebuffer itself (`/dev/fb0`) needs no extra package — just access permission:
+
+```sh
+sudo usermod -aG video $USER   # allow /dev/fb0 without sudo; re-login after
+```
+
+Run on a virtual console, not inside X11 or Wayland:
+
+```sh
+Ctrl-Alt-F2    # switch to VT2
+Ctrl-Alt-F1    # return to desktop
+```
+
+Or switch programmatically: `fbVtSwitch(scr, 2, true)` (requires root or `tty` group).
+
+Tested on: desktop VTs, Raspberry Pi, QEMU virtio-vga, KMS/DRM fbdev.
 
 ---
 
@@ -505,8 +678,8 @@ python3 examples/multicast_demo.py
 
 `fbInit` automatically installs `SIGINT`, `SIGTERM`, and `SIGHUP` handlers
 plus an `atexit` callback.  If the process is killed or crashes, terminal raw
-mode is restored and the cursor is re-enabled — the console is always left in
-a usable state.
+mode is restored, the cursor is re-enabled, and the original screen contents
+are restored — the console is always left in a usable state.
 
 ---
 
@@ -514,10 +687,12 @@ a usable state.
 
 | File | Purpose |
 |---|---|
-| `fbcurses.h` / `fbcurses.c` | Core library: screen, windows, text, drawing, input, VT switching |
+| `fbcurses.h` / `fbcurses.c` | Core library: screen, windows, text, drawing, input, VT switching, pixel window accessors |
 | `fbcurses_internal.h` | Internal structs (not part of public API) |
+| `fbimage.h` / `fbimage.c` | Image loading (BMP/PNG/JPEG) and drawing — screen and window-aware |
+| `fbvideo.h` / `fbvideo.c` | Video playback via FFmpeg — simple and frame-by-frame APIs |
 | `boxdraw.c` | Unicode box/block/braille character renderer |
-| `widgets.c` | Progress bars, gauges, sparklines, tables, toasts, menus, dialogs |
+| `widgets.c` | Progress bars, gauges, sparklines, tables, toasts, menus, text input |
 | `dialogs.c` | File picker, colour picker, message box |
 | `fonts.h` / `fonts.c` | Font registry (`fbFontList[]`, `fbFontCount = 13`) |
 | `font_*.c` | Bitmap glyph data for each of the 13 fonts |

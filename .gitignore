@@ -55,6 +55,9 @@
 *.jpg
 *.png
 
+# Misc
+*.jnk
+
 # Kernel Module Compile Results
 *.mod*
 *.cmd
