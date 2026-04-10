@@ -201,6 +201,61 @@ void fbDrawTitleBar(fbWindow *win, const char *title,
 void fbDrawCustomBorder(fbWindow *win, const fbBorder *border);
 ```
 
+Custom borders use the `fbBorder` struct to specify any Unicode characters
+for all six border positions plus a colour:
+
+```c
+typedef struct {
+    fbBorderStyle style;     // set to FB_BORDER_CUSTOM
+    wchar_t tl, tr, bl, br; // four corners
+    wchar_t horiz, vert;     // horizontal and vertical bars
+    fbColor color;
+} fbBorder;
+```
+
+```c
+// Mixed: double horizontal, single vertical
+fbBorder mixed = {
+    .style = FB_BORDER_CUSTOM,
+    .tl = L'╒', .tr = L'╕', .bl = L'╘', .br = L'╛',
+    .horiz = L'═', .vert = L'│',
+    .color = FB_BRIGHT_CYAN,
+};
+fbDrawCustomBorder(win, &mixed);
+
+// Heavy corners, light bars
+fbBorder heavy = {
+    .style = FB_BORDER_CUSTOM,
+    .tl = L'┏', .tr = L'┓', .bl = L'┗', .br = L'┛',
+    .horiz = L'─', .vert = L'│',
+    .color = FB_YELLOW,
+};
+fbDrawCustomBorder(win, &heavy);
+
+// ASCII-art border
+fbBorder ascii = {
+    .style = FB_BORDER_CUSTOM,
+    .tl = L'+', .tr = L'+', .bl = L'+', .br = L'+',
+    .horiz = L'-', .vert = L'|',
+    .color = FB_GREEN,
+};
+fbDrawCustomBorder(win, &ascii);
+```
+
+The built-in styles use these characters for reference:
+
+| Style | TL | TR | BL | BR | Horiz | Vert |
+|---|---|---|---|---|---|---|
+| `SINGLE` | `┌` | `┐` | `└` | `┘` | `─` | `│` |
+| `DOUBLE` | `╔` | `╗` | `╚` | `╝` | `═` | `║` |
+| `ROUNDED` | `╭` | `╮` | `╰` | `╯` | `─` | `│` |
+| `THICK` | `┏` | `┓` | `┗` | `┛` | `━` | `┃` |
+| `DASHED` | `┌` | `┐` | `└` | `┘` | `╌` | `╎` |
+
+You can mix any characters from the Unicode box-drawing block (U+2500–U+257F)
+to create combinations like double horizontal with single vertical sides.
+The VGA font includes the full box-drawing range.
+
 ### Widgets
 ```c
 void fbDrawProgressBar(fbWindow *win, int col, int row, int width,
@@ -544,7 +599,7 @@ with FbNetMulticast(FbNetMulticast.FB_NET_MCAST_ALL, 9876) as mc:
 
 // Unicast
 int main(int argc, char *argv[]) {
-	char ip[18];
+    char ip[18];
     unsigned short port;
 
     strcpy(ip, "127.0.0.1");
@@ -558,22 +613,23 @@ int main(int argc, char *argv[]) {
         }
     }
 
-	fbNetClient *cl = fbncOpen(ip, port);
-	int win = fbncWinNew(cl, 2, 2, 60, 14);
-	fbncTitleBar(cl, win, "Hello", FBNC_BORDER_DOUBLE,
-             FBNC_CYAN, FBNC_BLACK, FBNC_CYAN);
-	fbncPrintAtFmt(cl, win, 4, 4, "Hello from C!");
-	fbncPrintPx(cl, 50, 200, "Big text", FBNC_BRIGHT_CYAN, FBNC_BLACK,
-            FBNC_ATTR_NONE, "16x32");
-	fbncRefreshFlush(cl, win);
-	fbncClose(cl);
+    fbNetClient *cl = fbncOpen(ip, port);
+    int win = fbncWinNew(cl, 2, 2, 60, 14);
+    fbncTitleBar(cl, win, "Hello", FBNC_BORDER_DOUBLE,
+                 FBNC_CYAN, FBNC_BLACK, FBNC_CYAN);
+    fbncPrintAtFmt(cl, win, 4, 4, "Hello from C!");
+    fbncPrintPx(cl, 50, 200, "Big text", FBNC_BRIGHT_CYAN, FBNC_BLACK,
+                FBNC_ATTR_NONE, "16x32");
+    fbncRefreshFlush(cl, win);
+    fbncClose(cl);
 
-	fbNetClient *mc = fbncOpenMcast(FBNC_MCAST_ALL, port);
-	fbncClear(mc, 0x000000);
-	fbncRefreshAllFlush(mc);
-	fbncClose(mc);
+    // Multicast
+    fbNetClient *mc = fbncOpenMcast(FB_NET_MCAST_ALL, port);
+    fbncClear(mc, 0x000000);
+    fbncRefreshAllFlush(mc);
+    fbncClose(mc);
 
-	return 0;
+    return 0;
 }
 ```
 
