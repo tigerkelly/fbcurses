@@ -142,4 +142,45 @@ bool fbVideoSeek(fbVideo *vid, double seconds);
  */
 void fbVideoClose(fbVideo *vid);
 
+
+/* ── Window-aware playback ────────────────────────────────────────── */
+
+/**
+ * fbVideoPlayInWindow — play a video scaled to fit inside an fbWindow.
+ *
+ * Identical to fbVideoPlay() except the display position and size are
+ * derived from the window's pixel geometry rather than passed explicitly.
+ * The video is letterboxed / pillarboxed to preserve its aspect ratio
+ * within the window bounds.
+ *
+ * @keepAspect  true  = letterbox/pillarbox (recommended)
+ *              false = stretch to fill the window exactly
+ *
+ * Returns a fbVideoResult code (FB_VIDEO_OK, FB_VIDEO_STOPPED, …).
+ */
+fbVideoResult fbVideoPlayInWindow(fbWindow *win, const char *path,
+                                   bool keepAspect);
+
+/**
+ * fbVideoNextFrameInWindow — decode the next frame and blit it into a window.
+ *
+ * Combines fbVideoNextFrame() with window-geometry scaling, so the frame
+ * is automatically sized and positioned to fill the window.
+ *
+ * Intended for use in a custom frame loop alongside other fbcurses drawing:
+ *
+ *   fbVideo *vid = fbVideoOpen("clip.mp4");
+ *   fbImage  frame = {0};
+ *   while (fbVideoNextFrameInWindow(vid, &frame, win, true)) {
+ *       fbRefresh(overlay_win);   // draw text overlay on top
+ *       fbFlush(scr);
+ *   }
+ *   free(frame.pixels);
+ *   fbVideoClose(vid);
+ *
+ * Returns true if a frame was decoded and blitted, false at end-of-stream.
+ */
+bool fbVideoNextFrameInWindow(fbVideo *vid, fbImage *frame,
+                               fbWindow *win, bool keepAspect);
+
 #endif /* FBVIDEO_H */

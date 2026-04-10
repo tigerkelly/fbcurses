@@ -50,6 +50,11 @@
 *.debug
 *.log
 
+# Videos and images
+*.mp4
+*.jpg
+*.png
+
 # Kernel Module Compile Results
 *.mod*
 *.cmd
@@ -69,6 +74,8 @@ font_demo
 net_demo
 quickstart
 unicast
+videoplayer
+imageview
 
 # debug information files
 *.dwo

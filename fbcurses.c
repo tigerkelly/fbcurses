@@ -1,7 +1,5 @@
 /*
  * fbcurses.c — Screen, window, drawing, text, input implementation.
- *
- * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 
@@ -457,8 +455,37 @@ void fbResizeWindow(fbWindow *win, int cols, int rows)
     }
 }
 
+fbScreen *fbWindowGetScreen(const fbWindow *win) { return win ? win->scr : NULL; }
 int fbWindowCols(const fbWindow *win) { return win ? win->cols : 0; }
 int fbWindowRows(const fbWindow *win) { return win ? win->rows : 0; }
+
+int fbWindowPixelX(const fbWindow *win)
+{
+    if (!win) return 0;
+    return win->col * win->font->w;
+}
+
+int fbWindowPixelY(const fbWindow *win)
+{
+    if (!win) return 0;
+    int bpr = (win->font->w + 7) / 8;
+    int cellH = win->font->h / bpr;
+    return win->row * cellH;
+}
+
+int fbWindowPixelW(const fbWindow *win)
+{
+    if (!win) return 0;
+    return win->cols * win->font->w;
+}
+
+int fbWindowPixelH(const fbWindow *win)
+{
+    if (!win) return 0;
+    int bpr = (win->font->w + 7) / 8;
+    int cellH = win->font->h / bpr;
+    return win->rows * cellH;
+}
 
 void fbClearWindow(fbWindow *win, fbColor bg)
 {

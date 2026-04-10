@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <errno.h>
 
 /* ── Optional format libraries ────────────────────────────────────── */
 #ifdef FBIMAGE_PNG
@@ -282,28 +283,57 @@ fbImage *fbImageLoadJPEG(const char *path)
 
 fbImage *fbImageLoad(const char *path)
 {
-    if (!path) return NULL;
+    if (!path) {
+        fprintf(stderr, "fbImageLoad: NULL path\n");
+        return NULL;
+    }
 
     /* Detect format from the first few bytes */
     FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    if (!f) {
+        fprintf(stderr, "fbImageLoad: cannot open '%s': %s\n",
+                path, strerror(errno));
+        return NULL;
+    }
     uint8_t magic[8] = {0};
-    if (fread(magic, 1, 8, f) < 1) { /* best-effort magic read */ }
+    size_t got = fread(magic, 1, 8, f);
     fclose(f);
 
+    if (got < 2) {
+        fprintf(stderr, "fbImageLoad: '%s': file too short\n", path);
+        return NULL;
+    }
+
     /* PNG: \x89 P N G \r \n \x1a \n */
-    if (magic[0] == 0x89 && magic[1] == 'P' && magic[2] == 'N' && magic[3] == 'G')
+    if (magic[0] == 0x89 && magic[1] == 'P' && magic[2] == 'N' && magic[3] == 'G') {
+#ifdef FBIMAGE_PNG
         return fbImageLoadPNG(path);
+#else
+        fprintf(stderr, "fbImageLoad: '%s' is PNG but PNG support not compiled in "
+                        "(rebuild with -DFBIMAGE_PNG and -lpng)\n", path);
+        return NULL;
+#endif
+    }
 
     /* JPEG: FF D8 FF */
-    if (magic[0] == 0xFF && magic[1] == 0xD8 && magic[2] == 0xFF)
+    if (magic[0] == 0xFF && magic[1] == 0xD8 && magic[2] == 0xFF) {
+#ifdef FBIMAGE_JPEG
         return fbImageLoadJPEG(path);
+#else
+        fprintf(stderr, "fbImageLoad: '%s' is JPEG but JPEG support not compiled in "
+                        "(rebuild with -DFBIMAGE_JPEG and -ljpeg)\n", path);
+        return NULL;
+#endif
+    }
 
     /* BMP: B M */
     if (magic[0] == 'B' && magic[1] == 'M')
         return fbImageLoadBMP(path);
 
-    return NULL;   /* unrecognised format */
+    fprintf(stderr, "fbImageLoad: '%s': unrecognised format "
+                    "(magic: %02X %02X %02X %02X)\n",
+                    path, magic[0], magic[1], magic[2], magic[3]);
+    return NULL;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -454,4 +484,55 @@ fbImage *fbImageScaleFit(const fbImage *src, int maxW, int maxH)
     if (newH < 1) newH = 1;
 
     return fbImageScale(src, newW, newH);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  Window-aware drawing
+ * ═══════════════════════════════════════════════════════════════════ */
+
+void fbImageDrawInWindow(fbWindow *win, const fbImage *img, bool keepAspect)
+{
+    if (!win || !img) return;
+    fbImageDrawInWindowRegion(win, img, 0, 0, 0, 0, keepAspect);
+}
+
+void fbImageDrawInWindowRegion(fbWindow *win, const fbImage *img,
+                                int srcX, int srcY, int srcW, int srcH,
+                                bool keepAspect)
+{
+    if (!win || !img) return;
+
+    int winX = fbWindowPixelX(win);
+    int winY = fbWindowPixelY(win);
+    int winW = fbWindowPixelW(win);
+    int winH = fbWindowPixelH(win);
+
+    if (winW <= 0 || winH <= 0) return;
+
+    /* Default source region = whole image */
+    if (srcW <= 0) srcW = img->width  - srcX;
+    if (srcH <= 0) srcH = img->height - srcY;
+
+    int dstX, dstY, dstW, dstH;
+
+    if (keepAspect) {
+        /* Letterbox / pillarbox: scale to fit, centred */
+        float scaleW = (float)winW / (float)srcW;
+        float scaleH = (float)winH / (float)srcH;
+        float scale  = (scaleW < scaleH) ? scaleW : scaleH;
+        dstW = (int)(srcW * scale);
+        dstH = (int)(srcH * scale);
+        dstX = winX + (winW - dstW) / 2;
+        dstY = winY + (winH - dstH) / 2;
+    } else {
+        /* Stretch to fill window exactly */
+        dstX = winX;
+        dstY = winY;
+        dstW = winW;
+        dstH = winH;
+    }
+
+    fbImageDrawRegion(win->scr, img,
+                      srcX, srcY, srcW, srcH,
+                      dstX, dstY, dstW, dstH);
 }

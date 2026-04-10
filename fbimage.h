@@ -127,4 +127,30 @@ fbImage *fbImageScale(const fbImage *src, int newW, int newH);
  */
 fbImage *fbImageScaleFit(const fbImage *src, int maxW, int maxH);
 
+
+/* ── Window-aware drawing ─────────────────────────────────────────── */
+
+/**
+ * fbImageDrawInWindow — draw an image scaled to fit inside an fbWindow.
+ *
+ * The image is scaled to fill the window's pixel area while preserving
+ * the aspect ratio (letterboxed / pillarboxed).  The window's position
+ * and size are computed automatically from the window's character-cell
+ * geometry and active font.
+ *
+ * @keepAspect  true  = letterbox/pillarbox to preserve aspect ratio
+ *              false = stretch to fill the window exactly
+ */
+void fbImageDrawInWindow(fbWindow *win, const fbImage *img, bool keepAspect);
+
+/**
+ * fbImageDrawInWindowRegion — draw a sub-region of an image into a window.
+ *
+ * @srcX,@srcY,@srcW,@srcH  source rectangle within the image (0s = whole image)
+ * @keepAspect               as above
+ */
+void fbImageDrawInWindowRegion(fbWindow *win, const fbImage *img,
+                                int srcX, int srcY, int srcW, int srcH,
+                                bool keepAspect);
+
 #endif /* FBIMAGE_H */

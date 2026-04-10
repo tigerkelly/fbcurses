@@ -4,8 +4,6 @@
 /*
  * fbcurses.h — Linux Framebuffer TUI Library
  * A ncurses-style API for direct framebuffer rendering.
- *
- * Copyright (c) 2026 Richard Kelly Wiles (rkwiles@twc.com)
  */
 
 #include <stdint.h>
@@ -179,9 +177,21 @@ void fbMoveWindow(fbWindow *win, int col, int row);
 /** fbResizeWindow — resize a window (character coordinates). */
 void fbResizeWindow(fbWindow *win, int cols, int rows);
 
+/** fbWindowGetScreen — return the fbScreen this window belongs to. */
+fbScreen *fbWindowGetScreen(const fbWindow *win);
+
 /** fbWindowCols / fbWindowRows — window dimensions in character cells. */
 int fbWindowCols(const fbWindow *win);
 int fbWindowRows(const fbWindow *win);
+
+/** fbWindowPixelX / fbWindowPixelY — top-left corner of a window in pixels. */
+int fbWindowPixelX(const fbWindow *win);
+int fbWindowPixelY(const fbWindow *win);
+
+/** fbWindowPixelW / fbWindowPixelH — window size in pixels.
+ *  Accounts for the active font's cell size (including large fonts). */
+int fbWindowPixelW(const fbWindow *win);
+int fbWindowPixelH(const fbWindow *win);
 
 /**
  * fbClearWindow — fill the window background with a colour.
