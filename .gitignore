@@ -53,7 +53,7 @@
 # Videos and images
 *.mp4
 *.jpg
-*.png
+#*.png
 
 # Misc
 *.jnk

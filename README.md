@@ -9,6 +9,10 @@ on the network can drive the display using a simple CSV-over-UDP protocol, with
 client libraries in C and Python.
 
 ---
+<img src="images/demo_page1.png" alt="Demo Page 1" width="600">&nbsp;<img src="images/demo_page2.png" alt="Demo Page 2" width="600"><br>
+<img src="images/demo_page4.png" alt="Demo Page 4" width="600">&nbsp;<img src="images/demo_page5.png" alt="Demo Page 5" width="600"><b
+<img src="images/font_page1.png" alt="Font Page 1" width="600">&nbsp;<img src="images/font_page2.png" alt="Font Page 2" width="600">
+---
 
 ## Quick start
 
