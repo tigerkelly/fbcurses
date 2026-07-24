@@ -12,18 +12,20 @@ LIB_SRC = fbcurses.c strqtok_r.c qparse.c fbimage.c fbvideo.c font8x16.c font_12
 LIB_OBJ = $(LIB_SRC:.c=.o)
 LIB     = libfbcurses.a
 
-DEMOS   = demo font_demo net_demo
+DEMOS    = demo font_demo net_demo
 
-.PHONY: all clean install
+EXAMPLES = examples/clock examples/sysmon examples/logview examples/imageview examples/videoplayer
 
-all: $(LIB) $(DEMOS)
+.PHONY: all examples clean install
+
+all: $(LIB) $(DEMOS) examples
 
 # Library
 $(LIB): $(LIB_OBJ)
 	$(AR) rcs $@ $^
 	ranlib $@
 
-# Demo programs
+# Built-in demo programs
 demo: demo.c $(LIB)
 	$(CC) $(CFLAGS) -o $@ $< -L. -lfbcurses $(LDFLAGS)
 
@@ -33,11 +35,23 @@ font_demo: font_demo.c $(LIB)
 net_demo: net_demo.c $(LIB)
 	$(CC) $(CFLAGS) -o $@ $< -L. -lfbcurses $(LDFLAGS)
 
-unicast: unicast.c $(LIB)
-	$(CC) $(CFLAGS) -o $@ $< -L. -lfbcurses $(LDFLAGS)
+# Example programs (built into examples/)
+examples: $(EXAMPLES)
 
-quickstart: quickstart.c $(LIB)
-	$(CC) $(CFLAGS) -o $@ $< -L. -lfbcurses $(LDFLAGS)
+examples/clock: examples/clock.c $(LIB)
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -lfbcurses $(LDFLAGS)
+
+examples/sysmon: examples/sysmon.c $(LIB)
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -lfbcurses $(LDFLAGS)
+
+examples/logview: examples/logview.c $(LIB)
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -lfbcurses $(LDFLAGS)
+
+examples/imageview: examples/imageview.c $(LIB)
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -lfbcurses $(LDFLAGS)
+
+examples/videoplayer: examples/videoplayer.c $(LIB)
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -lfbcurses $(LDFLAGS)
 
 # Compile rule
 %.o: %.c
@@ -53,9 +67,9 @@ install: $(LIB)
 	install -m 644 fonts.h         $(DESTDIR)$(PREFIX)/include/
 	install -m 644 fbnet.h         $(DESTDIR)$(PREFIX)/include/
 	install -m 644 fbnet_client.h  $(DESTDIR)$(PREFIX)/include/
-	install -m 644 fbimage.h        $(DESTDIR)$(PREFIX)/include/
-	install -m 644 fbvideo.h        $(DESTDIR)$(PREFIX)/include/
-	install -m 644 $(LIB)          $(DESTDIR)$(PREFIX)/lib/
+	install -m 644 fbimage.h       $(DESTDIR)$(PREFIX)/include/
+	install -m 644 fbvideo.h       $(DESTDIR)$(PREFIX)/include/
+	install -m 644 $(LIB)         $(DESTDIR)$(PREFIX)/lib/
 
 clean:
-	rm -f $(LIB_OBJ) $(LIB) $(DEMOS)
+	rm -f $(LIB_OBJ) $(LIB) $(DEMOS) $(EXAMPLES)
