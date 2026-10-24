@@ -80,6 +80,9 @@ quickstart
 unicast
 videoplayer
 imageview
+logview
+clock
+sysmon
 
 # debug information files
 *.dwo
